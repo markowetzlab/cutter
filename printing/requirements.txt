@@ -1,0 +1,8 @@
+numpy-stl
+scikit-image
+numpy
+matplotlib
+scipy
+solidpython
+shapely
+ftplib
