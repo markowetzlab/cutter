@@ -10,8 +10,10 @@
 
 ### Rotation and habitat map generation
 Images are processed in MATLAB to generate habitat maps and correctly oriented volumes for printing. To test the code, run the following commands in a MATLAB prompt:
-    >> rotateTumour /path/to/CERR
-    >> makeHabitats /path/to/CERR
+```
+>> rotateTumour /path/to/CERR
+>> makeHabitats /path/to/CERR
+```
 
 ### Mould generation
 `python generate_mould.py example_data/aligned_tumour.mat`
