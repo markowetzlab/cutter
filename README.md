@@ -1,4 +1,6 @@
 ## 3D printed tumor moulds for guided tissue sampling
+This software should be cited with the DOI 10.5281/zenodo.3066305.
+
 ## Requirements
 * MATLAB
 * CERR (https://github.com/cerr/CERR)
