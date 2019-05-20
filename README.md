@@ -1,5 +1,5 @@
 ## 3D printed tumor moulds for guided tissue sampling
-This software should be cited with the DOI [10.5281/zenodo.3066305](10.5281/zenodo.3066305).
+This software should be cited with the DOI [10.5281/zenodo.3066305](http://dx.doi.org/10.5281/zenodo.3066304).
 
 ## Requirements
 * MATLAB
