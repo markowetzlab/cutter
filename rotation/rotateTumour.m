@@ -1,93 +1,85 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% Clear previous variables
-clear
-close all
+function [] = rotateTumour(cerr_path)
+    % Load CERR libraries
+    if isdir(cerr_path)
+        addpath(genpath(cerr_path))
+    else
+        error('Please specify the correct location of the CERR libraries.')
+    end
 
-%%% Important variables to set manually:
-cerr_path = '/Users/crispi01/CERR'
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % Open image
+    cerrFileName = 'example_data/segmented_images.mat'
+    disp('Loading CERR file...')
+    planC = loadPlanC(cerrFileName,tempdir);
+    indexS = planC{end};
 
-% Load CERR libraries
-if isdir(cerr_path)
-    addpath(genpath(cerr_path))
-else
-    error('Please specify the correct location of the CERR libraries.')
+    % Reslice image
+    disp('Reslicing image...');
+    planC = reSliceScan(1,0.1,0.1,0.1,false,planC);
+
+    % Get masks
+    disp('Getting masks...')
+    [struc_inclfat] = getNonUniformStr(1, planC); % Everything, including fat
+    [struc_tumour] = getNonUniformStr(3, planC);
+    [struc_whole] = getNonUniformStr(4, planC); % Does not include fat
+    [struc_edge1] = getNonUniformStr(5, planC);
+    [struc_edge2] = getNonUniformStr(6, planC);
+    [struc_contact1] = getNonUniformStr(7, planC);
+    [struc_contact2] = getNonUniformStr(8, planC);
+    [struc_contact3] = getNonUniformStr(9, planC);
+    [struc_vessels] = getNonUniformStr(10, planC);
+    [struc_hilum] = getNonUniformStr(11, planC);
+
+    % Combine masks
+    merged_mask = int16(struc_inclfat | struc_vessels | struc_edge1 | struc_edge2 | struc_contact1 | struc_contact2 | struc_contact3 );
+    struc_combi = zeros(size(struc_inclfat));
+    struc_combi(struc_inclfat) = 1;
+    struc_combi(struc_whole) = 2;
+    struc_combi(struc_hilum) = 8;
+    struc_combi(struc_vessels) = 3;
+    struc_combi(struc_edge1) = 4;
+    struc_combi(struc_edge2) = 5;
+    struc_combi(struc_tumour) = 6;
+    struc_combi(struc_contact1) = 7;
+    struc_combi(struc_contact2) = 7;
+    struc_combi(struc_contact3) = 7;
+
+    % Get bounding box
+    bb_merged = getBox(merged_mask);
+    box_combi = applyBox(struc_combi,bb_merged);
+
+    % Plot original volume
+    names = {'Fat','Whole','Vessels','Axis1','Axis2','Tumour','Contact','Hilum'};
+    plotVolume(box_combi,names)
+
+    % Apply 3 rotations
+    [rot1,tform1] = rotateMidpoint(box_combi, 3, 7, 1, [1 2], [1 0 0]);
+    [rot2,tform2] = rotateMidpoint(rot1, 3, 7, 1, [1 3], [0 0 1]);
+    [rot3,tform3] = rotateCentroids(rot2, 4, 5, [1 2], [1 0 0]);
+
+    % Get bounding vox of new volume
+    bb_rot3 = getBox(rot3);
+    box_final = applyBox(rot3,bb_rot3);
+
+    % Plot new, correctly-oriented volume
+    plotVolume(box_final,names);
+
+    % Plot the slices
+    plotSlices(box_final,names,'');
+
+    % Save the transforms
+    save('transf_patient.mat', 'tform1', 'tform2', 'tform3');
+
+    % Smooth out and plot
+    binary_box = zeros(size(box_final));
+    binary_box(box_final~=0) = 1;
+    smooth_box_final = smooth3(binary_box, 'gaussian', [9 9 9], 3);
+    threshold_smooth_box_final = zeros(size(smooth_box_final));
+    threshold_smooth_box_final(smooth_box_final>0.5) = 1;
+    plotVolume(threshold_smooth_box_final,names);
+
+    % Save the output file
+    save('aligned_tumour.mat', 'box_final')
 end
-
-% Open image
-cerrFileName = 'data/segmented_images.mat'
-disp('Loading CERR file...')
-planC = loadPlanC(cerrFileName,tempdir);
-indexS = planC{end};
-
-% Reslice image
-disp('Reslicing image...');
-planC = reSliceScan(1,0.1,0.1,0.1,false,planC);
-
-% Get masks
-disp('Getting masks...')
-[struc_inclfat] = getNonUniformStr(1, planC); % Everything, including fat
-[struc_tumour] = getNonUniformStr(3, planC);
-[struc_whole] = getNonUniformStr(4, planC); % Does not include fat
-[struc_edge1] = getNonUniformStr(5, planC);
-[struc_edge2] = getNonUniformStr(6, planC);
-[struc_contact1] = getNonUniformStr(7, planC);
-[struc_contact2] = getNonUniformStr(8, planC);
-[struc_contact3] = getNonUniformStr(9, planC);
-[struc_vessels] = getNonUniformStr(10, planC);
-[struc_hilum] = getNonUniformStr(11, planC);
-
-% Combine masks
-merged_mask = int16(struc_inclfat | struc_vessels | struc_edge1 | struc_edge2 | struc_contact1 | struc_contact2 | struc_contact3 );
-struc_combi = zeros(size(struc_inclfat));
-struc_combi(struc_inclfat) = 1;
-struc_combi(struc_whole) = 2;
-struc_combi(struc_hilum) = 8;
-struc_combi(struc_vessels) = 3;
-struc_combi(struc_edge1) = 4;
-struc_combi(struc_edge2) = 5;
-struc_combi(struc_tumour) = 6;
-struc_combi(struc_contact1) = 7;
-struc_combi(struc_contact2) = 7;
-struc_combi(struc_contact3) = 7;
-
-% Get bounding box
-bb_merged = getBox(merged_mask);
-box_combi = applyBox(struc_combi,bb_merged);
-
-% Plot original volume
-names = {'Fat','Whole','Vessels','Axis1','Axis2','Tumour','Contact','Hilum'};
-plotVolume(box_combi,names)
-
-% Apply 3 rotations
-[rot1,tform1] = rotateMidpoint(box_combi, 3, 7, 1, [1 2], [1 0 0]);
-[rot2,tform2] = rotateMidpoint(rot1, 3, 7, 1, [1 3], [0 0 1]);
-[rot3,tform3] = rotateCentroids(rot2, 4, 5, [1 2], [1 0 0]);
-
-% Get bounding vox of new volume
-bb_rot3 = getBox(rot3);
-box_final = applyBox(rot3,bb_rot3);
-
-% Plot new, correctly-oriented volume
-plotVolume(box_final,names);
-
-% Plot the slices
-plotSlices(box_final,names,'');
-
-% Save the transforms
-save('transf_patient.mat', 'tform1', 'tform2', 'tform3');
-
-% Smooth out and plot
-binary_box = zeros(size(box_final));
-binary_box(box_final~=0) = 1;
-smooth_box_final = smooth3(binary_box, 'gaussian', [9 9 9], 3);
-threshold_smooth_box_final = zeros(size(smooth_box_final));
-threshold_smooth_box_final(smooth_box_final>0.5) = 1;
-plotVolume(threshold_smooth_box_final,names);
-
-% Save the output file
-save('aligned_tumour.mat', 'box_final')
-
 
 
 %%%%%%%%% AUXILIARY FUNCTIONS %%%%%%%%%%%

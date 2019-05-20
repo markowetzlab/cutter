@@ -1,153 +1,145 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% Clear previous variables
-clear
-close all
-
-%%% Important variables to set manually:
-cerr_path = '/Users/crispi01/CERR'
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Load CERR libraries
-if isdir(cerr_path)
-    addpath(genpath(cerr_path))
-else
-    error('Please specify the correct location of the CERR libraries.')
-end
-
-% Open image
-cerrFileName = 'data/segmented_images.mat'
-disp('Loading CERR file...')
-planC = loadPlanC(cerrFileName,tempdir);
-indexS = planC{end};
-
-% Now reslice...
-disp('Reslicing image...');
-planC = reSliceScan(1,0.1,0.1,0.1,false,planC);
-planC = reSliceScan(2,0.1,0.1,0.1,false,planC);
-planC = reSliceScan(3,0.1,0.1,0.1,false,planC);
-planC = reSliceScan(4,0.1,0.1,0.1,false,planC);
-planC = reSliceScan(6,0.1,0.1,0.1,false,planC);
-planC = reSliceScan(7,0.1,0.1,0.1,false,planC);
-planC = reSliceScan(8,0.1,0.1,0.1,false,planC);
-
-% Get masks
-disp('Getting masks...')
-[struc_3dprint] = getNonUniformStr(1, planC);
-[struc_tum] = getNonUniformStr(3, planC);
-
-% Create kidney
-struc_rest = struc_3dprint;
-struc_rest(struc_tum>0) = 0;
-
-% Get the scan matrices
-disp('Getting scan matrices...')
-t1w_scan = getScanArray(planC{indexS.scan}(1));
-d0_scan = getScanArray(planC{indexS.scan}(2));
-perf_scan = getScanArray(planC{indexS.scan}(3));
-hypercube_scan = getScanArray(planC{indexS.scan}(4));
-ktrans_scan = getScanArray(planC{indexS.scan}(6));
-t1map_scan = getScanArray(planC{indexS.scan}(7));
-r2st_scan = getScanArray(planC{indexS.scan}(8));
-scan_name = {'T1w', 'D0', 'PerfFrac', 'T2w', 'Ktrans', 'T1map', 'R2star'};
-
-% Get scan arrays
-z_array_scan_t1w = zscore(double(t1w_scan(struc_tum)));
-z_array_scan_d0 = zscore(double(d0_scan(struc_tum)));
-z_array_scan_perf = zscore(double(perf_scan(struc_tum)));
-z_array_scan_hypercube = zscore(double(hypercube_scan(struc_tum)));
-z_array_scan_ktrans = zscore(double(ktrans_scan(struc_tum)));
-z_array_scan_t1map = zscore(double(t1map_scan(struc_tum)));
-z_array_scan_r2st = zscore(double(r2st_scan(struc_tum)));
-%
-array_scan_t1w = double(t1w_scan(struc_tum));
-array_scan_d0 = double(d0_scan(struc_tum));
-array_scan_perf = double(perf_scan(struc_tum));
-array_scan_hypercube = double(hypercube_scan(struc_tum));
-array_scan_ktrans = double(ktrans_scan(struc_tum));
-array_scan_t1map = double(t1map_scan(struc_tum));
-array_scan_r2st = double(r2st_scan(struc_tum));
-
-% Get x,y,z
-indices = find(struc_tum);
-[x,y,z] = ind2sub(size(struc_tum), indices);
-
-% Create combined matrix
-M = [x y z z_array_scan_t1w z_array_scan_d0 z_array_scan_perf z_array_scan_hypercube z_array_scan_ktrans z_array_scan_t1map z_array_scan_r2st];
-M_notz = [x y z array_scan_t1w array_scan_d0 array_scan_perf array_scan_hypercube array_scan_ktrans array_scan_t1map array_scan_r2st];
-Z = zscore(M);
-
-% Apply clustering
-rng(1)
-disp('K-means clustering...')
-num_clusters = [3];
-col = brewermap(8,'Accent');
-
-for k=num_clusters
-    idx = kmeans(Z,k,'Replicates',20);
-
-    figure;
-    hold on;
-    clusters_struct = zeros(size(struc_tum));
-    clusters_struct(struc_tum) = idx;
-    
-    % Draw clusters
-    clusNames = {}; 
-    for eachClus=1:k
-        new_struc = zeros(size(struc_tum));
-        new_struc(struc_tum) = int8(idx==eachClus);
-        blockPlot(new_struc, [0 0 0], 'FaceColor', col(eachClus,:), 'FaceAlpha', 0.5, 'EdgeColor', 'none');
-        box on;
-        grid on;
-        titleString = sprintf('Cluster %i/%i', eachClus, k);
-        title(titleString);
-        clusNames{eachClus} = titleString;
+function [] = rotateTumour(cerr_path)
+    % Load CERR libraries
+    if isdir(cerr_path)
+        addpath(genpath(cerr_path))
+    else
+        error('Please specify the correct location of the CERR libraries.')
     end
-    
-    % Draw kidney
-    blockPlot(struc_rest, [0 0 0], 'FaceColor', [0.5, 0.5, 0.5], 'FaceAlpha', 0.5, 'EdgeColor', 'none');
-    clusNames{k+1} = 'Kidney';
-    hold off;
 
-    % Draw histograms
-    figure;
-    colours = {[220,245,166]./255, [239,129,245]./255, [249,157,155]./255};
-    for pp=1:length(scan_name)
-        subplot(3,3,pp);
+    % Open image
+    cerrFileName = 'example_data/segmented_images.mat'
+    disp('Loading CERR file...')
+    planC = loadPlanC(cerrFileName,tempdir);
+    indexS = planC{end};
+
+    % Now reslice...
+    disp('Reslicing image...');
+    planC = reSliceScan(1,0.1,0.1,0.1,false,planC);
+    planC = reSliceScan(2,0.1,0.1,0.1,false,planC);
+    planC = reSliceScan(3,0.1,0.1,0.1,false,planC);
+    planC = reSliceScan(4,0.1,0.1,0.1,false,planC);
+    planC = reSliceScan(6,0.1,0.1,0.1,false,planC);
+    planC = reSliceScan(7,0.1,0.1,0.1,false,planC);
+    planC = reSliceScan(8,0.1,0.1,0.1,false,planC);
+
+    % Get masks
+    disp('Getting masks...')
+    [struc_3dprint] = getNonUniformStr(1, planC);
+    [struc_tum] = getNonUniformStr(3, planC);
+
+    % Create kidney
+    struc_rest = struc_3dprint;
+    struc_rest(struc_tum>0) = 0;
+
+    % Get the scan matrices
+    disp('Getting scan matrices...')
+    t1w_scan = getScanArray(planC{indexS.scan}(1));
+    d0_scan = getScanArray(planC{indexS.scan}(2));
+    perf_scan = getScanArray(planC{indexS.scan}(3));
+    hypercube_scan = getScanArray(planC{indexS.scan}(4));
+    ktrans_scan = getScanArray(planC{indexS.scan}(6));
+    t1map_scan = getScanArray(planC{indexS.scan}(7));
+    r2st_scan = getScanArray(planC{indexS.scan}(8));
+    scan_name = {'T1w', 'D0', 'PerfFrac', 'T2w', 'Ktrans', 'T1map', 'R2star'};
+
+    % Get scan arrays
+    z_array_scan_t1w = zscore(double(t1w_scan(struc_tum)));
+    z_array_scan_d0 = zscore(double(d0_scan(struc_tum)));
+    z_array_scan_perf = zscore(double(perf_scan(struc_tum)));
+    z_array_scan_hypercube = zscore(double(hypercube_scan(struc_tum)));
+    z_array_scan_ktrans = zscore(double(ktrans_scan(struc_tum)));
+    z_array_scan_t1map = zscore(double(t1map_scan(struc_tum)));
+    z_array_scan_r2st = zscore(double(r2st_scan(struc_tum)));
+    %
+    array_scan_t1w = double(t1w_scan(struc_tum));
+    array_scan_d0 = double(d0_scan(struc_tum));
+    array_scan_perf = double(perf_scan(struc_tum));
+    array_scan_hypercube = double(hypercube_scan(struc_tum));
+    array_scan_ktrans = double(ktrans_scan(struc_tum));
+    array_scan_t1map = double(t1map_scan(struc_tum));
+    array_scan_r2st = double(r2st_scan(struc_tum));
+
+    % Get x,y,z
+    indices = find(struc_tum);
+    [x,y,z] = ind2sub(size(struc_tum), indices);
+
+    % Create combined matrix
+    M = [x y z z_array_scan_t1w z_array_scan_d0 z_array_scan_perf z_array_scan_hypercube z_array_scan_ktrans z_array_scan_t1map z_array_scan_r2st];
+    M_notz = [x y z array_scan_t1w array_scan_d0 array_scan_perf array_scan_hypercube array_scan_ktrans array_scan_t1map array_scan_r2st];
+    Z = zscore(M);
+
+    % Apply clustering
+    rng(1)
+    disp('K-means clustering...')
+    num_clusters = [3];
+    col = brewermap(8,'Accent');
+
+    for k=num_clusters
+        idx = kmeans(Z,k,'Replicates',20);
+
+        figure;
         hold on;
-        array_scan = M(:, pp+3);
-        for ii=1:max(idx(:))
-            histogram(array_scan(idx==ii),20,'FaceColor',colours{ii},'EdgeColor',[0.65,0.65,0.65]);
+        clusters_struct = zeros(size(struc_tum));
+        clusters_struct(struc_tum) = idx;
+        
+        % Draw clusters
+        clusNames = {}; 
+        for eachClus=1:k
+            new_struc = zeros(size(struc_tum));
+            new_struc(struc_tum) = int8(idx==eachClus);
+            blockPlot(new_struc, [0 0 0], 'FaceColor', col(eachClus,:), 'FaceAlpha', 0.5, 'EdgeColor', 'none');
+            box on;
+            grid on;
+            titleString = sprintf('Cluster %i/%i', eachClus, k);
+            title(titleString);
+            clusNames{eachClus} = titleString;
         end
-        xlabel(scan_name{pp});
-        box on;
+        
+        % Draw kidney
+        blockPlot(struc_rest, [0 0 0], 'FaceColor', [0.5, 0.5, 0.5], 'FaceAlpha', 0.5, 'EdgeColor', 'none');
+        clusNames{k+1} = 'Kidney';
+        hold off;
+
+        % Draw histograms
+        figure;
+        colours = {[220,245,166]./255, [239,129,245]./255, [249,157,155]./255};
+        for pp=1:length(scan_name)
+            subplot(3,3,pp);
+            hold on;
+            array_scan = M(:, pp+3);
+            for ii=1:max(idx(:))
+                histogram(array_scan(idx==ii),20,'FaceColor',colours{ii},'EdgeColor',[0.65,0.65,0.65]);
+            end
+            xlabel(scan_name{pp});
+            box on;
+        end
+        legend({'Habitat 1','Habitat 2','Habitat 3'})
     end
-    legend({'Habitat 1','Habitat 2','Habitat 3'})
+
+    % Put the habitats back into the scan
+    scan_habitats = zeros(size(struc_tum));
+    scan_habitats(struc_tum) = idx;
+    scan_habitats(struc_rest) = num_clusters+1;
+    struc_merge = struc_tum | struc_rest;
+    bb_merge = getBox(struc_merge);
+    box_habitats = applyBox(scan_habitats,bb_merge);
+
+    % Apply the transformations...
+    load('transf_patient.mat')
+    rot1 = imwarp(box_habitats,tform1,'nearest');
+    rot2 = imwarp(rot1,tform2,'nearest');
+    rot3 = imwarp(rot2,tform3,'nearest');
+
+    % Get bounding vox of new volume
+    bb_rot3 = getBox(rot3);
+    box_final = applyBox(rot3,bb_rot3);
+
+    % Plot new, correctly-oriented volume
+    plotVolume(box_final,clusNames);
+
+    % Plot the slices
+    plotSlices(box_final,clusNames);
 end
-
-% Put the habitats back into the scan
-scan_habitats = zeros(size(struc_tum));
-scan_habitats(struc_tum) = idx;
-scan_habitats(struc_rest) = num_clusters+1;
-struc_merge = struc_tum | struc_rest;
-bb_merge = getBox(struc_merge);
-box_habitats = applyBox(scan_habitats,bb_merge);
-
-% Apply the transformations...
-load('transf_patient.mat')
-rot1 = imwarp(box_habitats,tform1,'nearest');
-rot2 = imwarp(rot1,tform2,'nearest');
-rot3 = imwarp(rot2,tform3,'nearest');
-
-% Get bounding vox of new volume
-bb_rot3 = getBox(rot3);
-box_final = applyBox(rot3,bb_rot3);
-
-% Plot new, correctly-oriented volume
-plotVolume(box_final,clusNames);
-
-% Plot the slices
-plotSlices(box_final,clusNames);
-
 
 
 %%%%%%%%%%%%%% FUNCTIONS %%%%%%%%%%%%%%%%
